@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { fetchDisplay } from '../api';
+import { advanceCheckPointer, fetchDisplay } from '../api';
 import LeftColumn from './LeftColumn';
 import RightColumn from './RightColumn';
 
 const POLL_MS = 3000;
-const ROW_LIMIT = 5;
-const WINDOW_START_KEY = 'display-window-start';
+const ROW_LIMIT = 10;
 
 function useAutoScroll(ref, dep) {
   useEffect(() => {
@@ -26,21 +25,20 @@ function normalizeStart(value, totalRows) {
 }
 
 export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢNG TRÌNH CHIẾU' }) {
-  const [groupA, setGroupA] = useState([]);
-  const [groupB, setGroupB] = useState([]);
+  const [rows, setRows] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
-  const [windowStart, setWindowStart] = useState(() =>
-    normalizeStart(localStorage.getItem(WINDOW_START_KEY), 0)
-  );
+  const [windowStart, setWindowStart] = useState(0);
+  const [isAdvancing, setIsAdvancing] = useState(false);
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
 
   const load = useCallback(async () => {
     try {
       const data = await fetchDisplay();
-      setGroupA(data.groupA || []);
-      setGroupB(data.groupB || []);
+      const incomingRows = data.rows || [];
+      setRows(incomingRows);
+      setWindowStart(normalizeStart(data.windowStart ?? 0, incomingRows.length));
       setStatus('ok');
       setError(null);
     } catch (e) {
@@ -55,31 +53,28 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     return () => clearInterval(id);
   }, [load]);
 
-  const totalRows = Math.max(groupA.length, groupB.length);
+  const totalRows = rows.length;
+  const visibleRows = rows.slice(windowStart, windowStart + ROW_LIMIT);
+  const visibleA = visibleRows.map((row) => row.left).filter(Boolean);
+  const visibleB = visibleRows.map((row) => row.right).filter(Boolean);
 
-  useEffect(() => {
-    setWindowStart((prev) => normalizeStart(String(prev), totalRows));
-  }, [totalRows]);
-
-  useEffect(() => {
-    localStorage.setItem(WINDOW_START_KEY, String(windowStart));
-  }, [windowStart]);
-
-  useEffect(() => {
-    const onStorage = (event) => {
-      if (event.key !== WINDOW_START_KEY) return;
-      setWindowStart(normalizeStart(event.newValue, totalRows));
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, [totalRows]);
-
-  const visibleA = groupA.slice(windowStart, windowStart + ROW_LIMIT);
-  const visibleB = groupB.slice(windowStart, windowStart + ROW_LIMIT);
-
-  const canAdvance = windowStart + ROW_LIMIT < totalRows;
-  const advanceWindow = () => {
-    setWindowStart((prev) => normalizeStart(String(prev + 1), totalRows));
+  const canAdvance = windowStart + 1 < totalRows;
+  const advanceWindow = async () => {
+    if (isAdvancing) return;
+    try {
+      setIsAdvancing(true);
+      const result = await advanceCheckPointer();
+      if (result?.advanced === false && result?.reason) {
+        setError(`Không thể chuyển tiếp: ${result.reason}`);
+      } else {
+        setError(null);
+      }
+      await load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setIsAdvancing(false);
+    }
   };
 
   useAutoScroll(leftScrollRef, visibleA.length);
@@ -107,7 +102,12 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
 
       {enableAdvance && (
         <div className="display-board__actions">
-          <button className="display-board__next-btn" type="button" onClick={advanceWindow} disabled={!canAdvance}>
+          <button
+            className="display-board__next-btn"
+            type="button"
+            onClick={advanceWindow}
+            disabled={!canAdvance || isAdvancing}
+          >
             Chuyển tiếp
           </button>
         </div>

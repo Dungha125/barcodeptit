@@ -2,6 +2,9 @@ const SHEET_ID = import.meta.env.VITE_SHEET_ID || '1Po1O8Dk3MmTATy9NZo6-NA5SUHiu
 const SHEET_GID = import.meta.env.VITE_SHEET_GID || '0';
 const SHEET_QUERY_URL =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
+const FALLBACK_HOST =
+  typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+const WRITE_API_BASE = import.meta.env.VITE_WRITE_API_URL || `http://${FALLBACK_HOST}:8000`;
 
 function splitName(fullName = '') {
   const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
@@ -43,6 +46,13 @@ function getCell(row, index) {
   return cell?.v ?? cell?.f ?? '';
 }
 
+function rowHasDisplayData(row) {
+  for (let i = 0; i < 8; i += 1) {
+    if (String(getCell(row, i) || '').trim()) return true;
+  }
+  return false;
+}
+
 function parseGvizText(rawText) {
   const start = rawText.indexOf('{');
   const end = rawText.lastIndexOf('});');
@@ -51,12 +61,12 @@ function parseGvizText(rawText) {
 }
 
 function normalizeBoardDataFromSheet(gvizPayload) {
-  const rows = gvizPayload?.table?.rows || [];
-  const groupA = [];
-  const groupB = [];
+  const allRows = gvizPayload?.table?.rows || [];
+  const rows = allRows.slice(1); // bỏ header/title
+  const boardRows = [];
 
-  // Bỏ dòng đầu vì là header/title trong sheet.
-  rows.slice(1).forEach((row, idx) => {
+  rows.forEach((row, idx) => {
+    if (!rowHasDisplayData(row)) return;
     const hoTenA = getCell(row, 0);
     const maSVA = getCell(row, 1);
     const xepLoaiA = getCell(row, 2);
@@ -67,20 +77,53 @@ function normalizeBoardDataFromSheet(gvizPayload) {
     const xepLoaiB = getCell(row, 6);
     const avatarB = getCell(row, 7);
 
-    if ([hoTenA, maSVA, xepLoaiA, avatarA].some((v) => String(v || '').trim())) {
-      groupA.push(buildItem({ group: 'A', hoTen: hoTenA, maSV: maSVA, xepLoai: xepLoaiA, avatar: avatarA, rowIndex: idx + 3 }));
-    }
+    const left =
+      [hoTenA, maSVA, xepLoaiA, avatarA].some((v) => String(v || '').trim())
+        ? buildItem({
+            group: 'A',
+            hoTen: hoTenA,
+            maSV: maSVA,
+            xepLoai: xepLoaiA,
+            avatar: avatarA,
+            rowIndex: idx + 3,
+          })
+        : null;
 
-    if ([hoTenB, maSVB, xepLoaiB, avatarB].some((v) => String(v || '').trim())) {
-      groupB.push(buildItem({ group: 'B', hoTen: hoTenB, maSV: maSVB, xepLoai: xepLoaiB, avatar: avatarB, rowIndex: idx + 3 }));
-    }
+    const right =
+      [hoTenB, maSVB, xepLoaiB, avatarB].some((v) => String(v || '').trim())
+        ? buildItem({
+            group: 'B',
+            hoTen: hoTenB,
+            maSV: maSVB,
+            xepLoai: xepLoaiB,
+            avatar: avatarB,
+            rowIndex: idx + 3,
+          })
+        : null;
+
+    boardRows.push({ left, right });
   });
+
+  const markerRawIndex = rows.findIndex(
+    (row) => String(getCell(row, 8) || '').trim().toLowerCase() === 'x'
+  );
+
+  let windowStart = 0;
+  if (markerRawIndex >= 0) {
+    let countDataRows = 0;
+    for (let i = 0; i <= markerRawIndex; i += 1) {
+      if (rowHasDisplayData(rows[i])) countDataRows += 1;
+    }
+    windowStart = Math.max(0, countDataRows - 1);
+  }
+
+  windowStart = Math.min(windowStart, Math.max(0, boardRows.length - 1));
 
   return {
     success: true,
-    groupA,
-    groupB,
-    total: Math.max(groupA.length, groupB.length),
+    rows: boardRows,
+    windowStart,
+    total: boardRows.length,
   };
 }
 
@@ -92,4 +135,14 @@ export async function fetchDisplay() {
   const rawText = await res.text();
   const gvizPayload = parseGvizText(rawText);
   return normalizeBoardDataFromSheet(gvizPayload);
+}
+
+export async function advanceCheckPointer() {
+  const res = await fetch(`${WRITE_API_BASE}/api/sheet/advance`, {
+    method: 'POST',
+  });
+  if (!res.ok) {
+    throw new Error(`Advance API: ${res.status}`);
+  }
+  return res.json();
 }
