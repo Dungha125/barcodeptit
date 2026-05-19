@@ -21,31 +21,49 @@ function useAutoScroll(ref, dep) {
 function normalizeStart(value, totalRows) {
   const parsed = Number.parseInt(value ?? '0', 10);
   if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, Math.max(0, totalRows - ROW_LIMIT));
+  return Math.min(parsed, Math.max(0, totalRows - 1));
 }
 
 export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢNG TRÌNH CHIẾU' }) {
-  const [board, setBoard] = useState({ rows: [], windowStart: 0 });
+  const [board, setBoard] = useState({ rows: [], windowStart: 0, total: 0, hasNext: false });
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
   const latestLoadIdRef = useRef(0);
+  const lastBoardKeyRef = useRef('');
 
   const load = useCallback(async () => {
     const loadId = latestLoadIdRef.current + 1;
     latestLoadIdRef.current = loadId;
 
     try {
-      const data = await fetchDisplay();
+      const data = await fetchDisplay({ limit: ROW_LIMIT });
       if (loadId !== latestLoadIdRef.current) return;
 
-      const incomingRows = data.rows || [];
-      setBoard({
-        rows: incomingRows,
-        windowStart: normalizeStart(data.windowStart ?? 0, incomingRows.length),
-      });
+      const incomingRows = Array.isArray(data?.rows) ? data.rows : [];
+      const total = Math.max(
+        incomingRows.length,
+        Number.parseInt(data?.total ?? '0', 10) || incomingRows.length
+      );
+      const windowStart = normalizeStart(data?.windowStart ?? 0, total);
+      const hasNext = Boolean(
+        data?.hasNext ?? (windowStart + incomingRows.length < total)
+      );
+      const boardKey = `${windowStart}|${total}|${hasNext ? 1 : 0}|${incomingRows
+        .map((row) => `${row.sheet_row || ''}:${row.left?.id || '-'}:${row.right?.id || '-'}`)
+        .join('|')}`;
+
+      if (boardKey !== lastBoardKeyRef.current) {
+        lastBoardKeyRef.current = boardKey;
+        setBoard({
+          rows: incomingRows,
+          windowStart,
+          total,
+          hasNext,
+        });
+      }
       setStatus('ok');
       setError(null);
     } catch (e) {
@@ -61,15 +79,13 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     return () => clearInterval(id);
   }, [load]);
 
-  const { rows, windowStart } = board;
-  const totalRows = rows.length;
-  const visibleRows = rows.slice(windowStart, windowStart + ROW_LIMIT);
+  const { rows: visibleRows, windowStart, total: totalRows, hasNext } = board;
   const visibleA = visibleRows.map((row) => row.left).filter(Boolean);
   const visibleB = visibleRows.map((row) => row.right).filter(Boolean);
   const visibleAKey = visibleA.map((person) => person.id || person.ma_sv).join('|');
   const visibleBKey = visibleB.map((person) => person.id || person.ma_sv).join('|');
 
-  const canAdvance = windowStart + 1 < totalRows;
+  const canAdvance = hasNext;
   const advanceWindow = useCallback(async () => {
     if (isAdvancing) return;
     try {
@@ -133,7 +149,7 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
           {status === 'error' && <span className="display-board__status--err">{error}</span>}
           {status === 'ok' && (
             <span>
-              Hàng {Math.min(totalRows, windowStart + 1)}-{Math.min(totalRows, windowStart + ROW_LIMIT)} / {totalRows}
+              Hàng {Math.min(totalRows, windowStart + 1)}-{Math.min(totalRows, windowStart + Math.max(visibleRows.length, 1))} / {totalRows}
             </span>
           )}
         </div>

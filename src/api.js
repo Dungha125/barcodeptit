@@ -9,6 +9,7 @@ const DEFAULT_WRITE_API_BASE =
       ? `http://${window.location.hostname}:8000`
       : window.location.origin;
 const WRITE_API_BASE = import.meta.env.VITE_WRITE_API_URL || DEFAULT_WRITE_API_BASE;
+const SHEET_DISPLAY_API = `${WRITE_API_BASE}/api/sheet/display`;
 
 function splitName(fullName = '') {
   const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
@@ -132,7 +133,33 @@ function normalizeBoardDataFromSheet(gvizPayload) {
   };
 }
 
-export async function fetchDisplay({ signal } = {}) {
+export async function fetchDisplay({ signal, limit = 4 } = {}) {
+  const backendUrl = new URL(SHEET_DISPLAY_API);
+  backendUrl.searchParams.set('limit', String(limit));
+  backendUrl.searchParams.set('_ts', Date.now().toString());
+
+  try {
+    const backendRes = await fetch(backendUrl.toString(), {
+      cache: 'no-store',
+      signal,
+    });
+
+    if (backendRes.ok) {
+      const payload = await backendRes.json();
+      if (Array.isArray(payload?.rows)) {
+        return {
+          success: payload?.success !== false,
+          rows: payload.rows,
+          windowStart: Number.parseInt(payload?.windowStart ?? '0', 10) || 0,
+          total: Number.parseInt(payload?.total ?? '0', 10) || payload.rows.length,
+          hasNext: Boolean(payload?.hasNext),
+        };
+      }
+    }
+  } catch (e) {
+    if (e?.name === 'AbortError') throw e;
+  }
+
   const url = new URL(SHEET_QUERY_URL);
   url.searchParams.set('_ts', Date.now().toString());
 
@@ -145,7 +172,16 @@ export async function fetchDisplay({ signal } = {}) {
   }
   const rawText = await res.text();
   const gvizPayload = parseGvizText(rawText);
-  return normalizeBoardDataFromSheet(gvizPayload);
+  const normalized = normalizeBoardDataFromSheet(gvizPayload);
+  const rows = normalized.rows.slice(
+    normalized.windowStart,
+    normalized.windowStart + limit
+  );
+  return {
+    ...normalized,
+    rows,
+    hasNext: normalized.windowStart + rows.length < normalized.total,
+  };
 }
 
 export async function advanceCheckPointer() {
