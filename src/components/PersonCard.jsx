@@ -1,4 +1,6 @@
+import { useState } from 'react';
 import { motion } from 'framer-motion';
+import { NO_PHOTO_AVATAR } from '../api';
 
 function getInitials(hoTen) {
   if (!hoTen) return '?';
@@ -12,15 +14,33 @@ function accentFromId(id) {
   return hash % 2 === 0 ? 'person-card--red' : 'person-card--orange';
 }
 
-export default function PersonCard({ person, index = 0 }) {
+function isHttpAvatar(value) {
+  return /^https?:\/\//i.test(String(value || '').trim());
+}
+
+export default function PersonCard({ person, index = 0, onNoPhoto }) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const hoTen = person.ho_ten || `${person.ho_dem || ''} ${person.ten || ''}`.trim();
-  const meta = [person.nganh, person.lop, person.xep_loai].filter(Boolean);
-  const hasMeta = meta.length > 0;
   const borderClass = accentFromId(person.id || person.ma_sv || index);
+  const avatarIsHttp = isHttpAvatar(person.avatar_url);
+  const isNoPhoto = person.avatar_url === NO_PHOTO_AVATAR;
+  const canSetNoPhoto = Boolean(
+    onNoPhoto && person.ma_sv && person.sheet_row && person.group
+  );
+
+  const handleNoPhoto = async () => {
+    if (!canSetNoPhoto || isSubmitting || isNoPhoto) return;
+    try {
+      setIsSubmitting(true);
+      await onNoPhoto(person);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <motion.article
-      className={`person-card ${borderClass} ${hasMeta ? 'person-card--with-meta' : 'person-card--compact'}`}
+      className={`person-card ${borderClass} person-card--with-actions`}
       layout
       initial={{ opacity: 0, y: 48 }}
       animate={{ opacity: 1, y: 0 }}
@@ -32,25 +52,29 @@ export default function PersonCard({ person, index = 0 }) {
         opacity: { duration: 0.35 },
       }}
     >
-      <div className="person-card__avatar" aria-hidden>
-        {person.avatar_url ? (
+      <motion.div className="person-card__avatar" aria-hidden layout>
+        {avatarIsHttp ? (
           <img src={person.avatar_url} alt="" />
         ) : (
           <span className="person-card__initials">{getInitials(hoTen)}</span>
         )}
-      </div>
-      <div className="person-card__name">
+      </motion.div>
+      <motion.div className="person-card__name" layout>
         <h3 title={hoTen || '—'}>{hoTen || '—'}</h3>
         {person.ma_sv && <span className="person-card__masv" title={person.ma_sv}>{person.ma_sv}</span>}
-      </div>
-      {hasMeta && (
-        <div className="person-card__meta">
-          {meta.map((line, i) => (
-            <p key={i} className="person-card__meta-line" title={line}>
-              {line}
-            </p>
-          ))}
-        </div>
+      </motion.div>
+      {canSetNoPhoto && (
+        <motion.div className="person-card__actions" layout>
+          <button
+            type="button"
+            className="person-card__no-photo-btn"
+            onClick={handleNoPhoto}
+            disabled={isSubmitting || isNoPhoto}
+            title={isNoPhoto ? 'Đã đánh dấu không có ảnh' : 'Ghi G:RECORD\\ptit.png lên Sheet'}
+          >
+            {isSubmitting ? 'Đang ghi…' : isNoPhoto ? 'Đã đánh dấu' : 'Không có'}
+          </button>
+        </motion.div>
       )}
     </motion.article>
   );

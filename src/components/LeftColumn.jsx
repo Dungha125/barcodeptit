@@ -1,7 +1,7 @@
 import { AnimatePresence } from 'framer-motion';
 import PersonCard from './PersonCard';
 
-export default function LeftColumn({ items, slotCount = 4 }) {
+export default function LeftColumn({ items, slotCount = 4, onNoPhoto }) {
   const fillClass = slotCount > 0 ? 'board-column__scroll--fill' : '';
 
   return (
@@ -16,7 +16,12 @@ export default function LeftColumn({ items, slotCount = 4 }) {
       >
         <AnimatePresence mode="popLayout">
           {items.map((person, index) => (
-            <PersonCard key={person.id || person.ma_sv} person={person} index={index} />
+            <PersonCard
+              key={person.id || person.ma_sv}
+              person={person}
+              index={index}
+              onNoPhoto={onNoPhoto}
+            />
           ))}
         </AnimatePresence>
       </div>

@@ -24,7 +24,16 @@ function splitName(fullName = '') {
 function normalizeAvatar(value) {
   const text = String(value || '').trim();
   if (!text) return null;
-  return /^https?:\/\//i.test(text) ? text : null;
+  if (/^https?:\/\//i.test(text)) return text;
+  if (/^G:RECORD\\/i.test(text)) return text;
+  return null;
+}
+
+export const NO_PHOTO_AVATAR = 'G:RECORD\\ptit.png';
+
+export function defaultRecordAvatar(maSv) {
+  const masv = String(maSv || '').trim();
+  return masv ? `G:RECORD\\${masv}` : '';
 }
 
 function buildItem({ group, hoTen, maSV, xepLoai, avatar, rowIndex }) {
@@ -181,6 +190,25 @@ export async function fetchDisplay({ signal, limit = 4, skip = 0 } = {}) {
     rows,
     hasNext: sliceStart + rows.length < normalized.total,
   };
+}
+
+export async function setSheetAvatarNoPhoto({ ma_sv, group, sheet_row }) {
+  const res = await fetch(`${WRITE_API_BASE}/api/sheet/avatar/no-photo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+    body: JSON.stringify({
+      ma_sv: String(ma_sv || '').trim(),
+      group: String(group || '').trim().toUpperCase(),
+      sheet_row: Number.parseInt(String(sheet_row), 10),
+    }),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    const message = detail?.detail?.reason || detail?.detail || `Avatar API: ${res.status}`;
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+  }
+  return res.json();
 }
 
 export async function advanceCheckPointer() {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { advanceCheckPointer, fetchDisplay } from '../api';
+import { advanceCheckPointer, fetchDisplay, NO_PHOTO_AVATAR, setSheetAvatarNoPhoto } from '../api';
 import LeftColumn from './LeftColumn';
 import RightColumn from './RightColumn';
 
@@ -19,6 +19,27 @@ function dedupeRows(existing, incoming) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
+  });
+}
+
+function attachRowMeta(row, person) {
+  if (!person) return null;
+  return { ...person, sheet_row: row.sheet_row };
+}
+
+function patchPersonAvatar(rows, person, avatarUrl) {
+  return rows.map((row) => {
+    const patchSide = (side) => {
+      if (
+        !side ||
+        side.ma_sv !== person.ma_sv ||
+        String(side.group || '').toUpperCase() !== String(person.group || '').toUpperCase()
+      ) {
+        return side;
+      }
+      return { ...side, avatar_url: avatarUrl };
+    };
+    return { ...row, left: patchSide(row.left), right: patchSide(row.right) };
   });
 }
 
@@ -145,10 +166,24 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
   }, [load]);
 
   const { rows: visibleRows, prefetchedRows, hasNext } = board;
-  const visibleA = visibleRows.map((row) => row.left).filter(Boolean);
-  const visibleB = visibleRows.map((row) => row.right).filter(Boolean);
+  const visibleA = visibleRows.map((row) => attachRowMeta(row, row.left)).filter(Boolean);
+  const visibleB = visibleRows.map((row) => attachRowMeta(row, row.right)).filter(Boolean);
 
   const canAdvance = hasNext || prefetchedRows.length > 0;
+
+  const handleNoPhoto = useCallback(async (person) => {
+    await setSheetAvatarNoPhoto({
+      ma_sv: person.ma_sv,
+      group: person.group,
+      sheet_row: person.sheet_row,
+    });
+    setBoard((prev) => ({
+      ...prev,
+      rows: patchPersonAvatar(prev.rows, person, NO_PHOTO_AVATAR),
+      prefetchedRows: patchPersonAvatar(prev.prefetchedRows, person, NO_PHOTO_AVATAR),
+    }));
+    setError(null);
+  }, []);
 
   const advanceWindow = useCallback(async () => {
     if (isAdvancing) return;
@@ -222,8 +257,8 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
           layout
           transition={{ layout: { duration: 0.35 } }}
         >
-          <LeftColumn items={visibleA} slotCount={ROW_LIMIT} />
-          <RightColumn items={visibleB} slotCount={ROW_LIMIT} />
+          <LeftColumn items={visibleA} slotCount={ROW_LIMIT} onNoPhoto={handleNoPhoto} />
+          <RightColumn items={visibleB} slotCount={ROW_LIMIT} onNoPhoto={handleNoPhoto} />
         </motion.div>
 
         <div className="display-board__meta" role="status" aria-live="polite">
