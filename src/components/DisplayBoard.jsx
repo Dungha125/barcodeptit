@@ -5,38 +5,8 @@ import LeftColumn from './LeftColumn';
 import RightColumn from './RightColumn';
 
 const POLL_MS = 3000;
-const REVEAL_MS = 2500;
-
-function itemKey(item) {
-  return `${item.group}-${item.ma_sv || item.id}`;
-}
-
-function useRevealQueue(groupItems) {
-  const [visible, setVisible] = useState([]);
-  const seen = useRef(new Set());
-  const queue = useRef([]);
-
-  useEffect(() => {
-    for (const item of groupItems) {
-      const key = itemKey(item);
-      if (!seen.current.has(key)) {
-        seen.current.add(key);
-        queue.current.push(item);
-      }
-    }
-  }, [groupItems]);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (queue.current.length === 0) return;
-      const next = queue.current.shift();
-      setVisible((prev) => [...prev, next]);
-    }, REVEAL_MS);
-    return () => clearInterval(id);
-  }, []);
-
-  return visible;
-}
+const ROW_LIMIT = 10;
+const WINDOW_START_KEY = 'display-window-start';
 
 function useAutoScroll(ref, dep) {
   useEffect(() => {
@@ -49,11 +19,20 @@ function useAutoScroll(ref, dep) {
   }, [dep, ref]);
 }
 
-export default function DisplayBoard() {
+function normalizeStart(value, totalRows) {
+  const parsed = Number.parseInt(value ?? '0', 10);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.min(parsed, Math.max(0, totalRows - ROW_LIMIT));
+}
+
+export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢNG TRÌNH CHIẾU' }) {
   const [groupA, setGroupA] = useState([]);
   const [groupB, setGroupB] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
+  const [windowStart, setWindowStart] = useState(() =>
+    normalizeStart(localStorage.getItem(WINDOW_START_KEY), 0)
+  );
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
 
@@ -76,8 +55,32 @@ export default function DisplayBoard() {
     return () => clearInterval(id);
   }, [load]);
 
-  const visibleA = useRevealQueue(groupA);
-  const visibleB = useRevealQueue(groupB);
+  const totalRows = Math.max(groupA.length, groupB.length);
+
+  useEffect(() => {
+    setWindowStart((prev) => normalizeStart(String(prev), totalRows));
+  }, [totalRows]);
+
+  useEffect(() => {
+    localStorage.setItem(WINDOW_START_KEY, String(windowStart));
+  }, [windowStart]);
+
+  useEffect(() => {
+    const onStorage = (event) => {
+      if (event.key !== WINDOW_START_KEY) return;
+      setWindowStart(normalizeStart(event.newValue, totalRows));
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [totalRows]);
+
+  const visibleA = groupA.slice(windowStart, windowStart + ROW_LIMIT);
+  const visibleB = groupB.slice(windowStart, windowStart + ROW_LIMIT);
+
+  const canAdvance = windowStart + ROW_LIMIT < totalRows;
+  const advanceWindow = () => {
+    setWindowStart((prev) => normalizeStart(String(prev + 1), totalRows));
+  };
 
   useAutoScroll(leftScrollRef, visibleA.length);
   useAutoScroll(rightScrollRef, visibleB.length);
@@ -90,17 +93,25 @@ export default function DisplayBoard() {
       transition={{ duration: 0.5 }}
     >
       <header className="display-board__top">
-        <h1 className="display-board__title">BẢNG TRÌNH CHIẾU</h1>
+        <h1 className="display-board__title">{pageTitle}</h1>
         <div className="display-board__status">
           {status === 'loading' && <span>Đang kết nối API…</span>}
           {status === 'error' && <span className="display-board__status--err">{error}</span>}
           {status === 'ok' && (
             <span>
-              A: {visibleA.length}/{groupA.length} · B: {visibleB.length}/{groupB.length}
+              Hàng {Math.min(totalRows, windowStart + 1)}-{Math.min(totalRows, windowStart + ROW_LIMIT)} / {totalRows}
             </span>
           )}
         </div>
       </header>
+
+      {enableAdvance && (
+        <div className="display-board__actions">
+          <button className="display-board__next-btn" type="button" onClick={advanceWindow} disabled={!canAdvance}>
+            Chuyển tiếp
+          </button>
+        </div>
+      )}
 
       <div className="display-board__split">
         <LeftColumn items={visibleA} listRef={leftScrollRef} />

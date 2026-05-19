@@ -84,6 +84,29 @@ body {
   gap: 0;
 }
 
+.display-board__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: clamp(8px, 1vh, 14px);
+}
+
+.display-board__next-btn {
+  border: none;
+  background: linear-gradient(90deg, var(--accent-red), var(--accent-orange));
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 10px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: clamp(0.8rem, 1.1vw, 0.95rem);
+}
+
+.display-board__next-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .display-board__divider {
   background: linear-gradient(
     180deg,
