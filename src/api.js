@@ -1,63 +1,81 @@
-const FALLBACK_HOST =
-  typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
-const API_BASE = import.meta.env.VITE_API_URL || `http://${FALLBACK_HOST}:8000`;
+const SHEET_ID =
+  import.meta.env.VITE_SHEET_ID || '1Po1O8Dk3MmTATy9NZo6-NA5SUHiuOjvECo1u37EDYZQ';
+const SHEET_GID = import.meta.env.VITE_SHEET_GID || '0';
+const SHEET_RANGE = import.meta.env.VITE_SHEET_RANGE || 'A:H';
 
-function toDisplayItem(student, group = 'A') {
-  if (!student) return null;
+function buildSheetUrl() {
+  const tqx = encodeURIComponent('out:json');
+  const range = encodeURIComponent(SHEET_RANGE);
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?gid=${SHEET_GID}&range=${range}&headers=1&tqx=${tqx}`;
+}
+
+function parseGoogleVisualizationJson(rawText) {
+  const start = rawText.indexOf('{');
+  const end = rawText.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(
+      'Không đọc được dữ liệu Sheet. Hãy Publish sheet hoặc bật quyền "Anyone with the link".'
+    );
+  }
+  return JSON.parse(rawText.slice(start, end + 1));
+}
+
+function cellValue(row, index) {
+  return row?.c?.[index]?.v ?? '';
+}
+
+function normalizeAvatar(value) {
+  const v = String(value || '').trim();
+  if (!v) return null;
+  if (v.startsWith('http://') || v.startsWith('https://') || v.startsWith('data:image/')) {
+    return v;
+  }
+  return null;
+}
+
+function mapRowToPerson(row, rowIndex, group, startCol) {
+  const hoTen = String(cellValue(row, startCol)).trim();
+  const maSv = String(cellValue(row, startCol + 1)).trim();
+  const xepLoai = String(cellValue(row, startCol + 2)).trim();
+  const avatarRaw = String(cellValue(row, startCol + 3)).trim();
+
+  if (!hoTen && !maSv) return null;
+
   return {
-    id: student.ma_sv || `${group}-${Date.now()}`,
-    ma_sv: student.ma_sv || '',
-    ho_ten: `${student.ho_dem || ''} ${student.ten || ''}`.trim(),
-    ho_dem: student.ho_dem || '',
-    ten: student.ten || '',
-    ngay_sinh: student.ngay_sinh || '',
-    noi_sinh: student.noi_sinh || '',
-    dtbc: student.dtbc || '',
-    xep_loai: student.xep_loai || '',
-    lop: student.lop || '',
-    nganh: student.nganh || '',
+    id: `${group}-${maSv || rowIndex + 2}`,
+    ma_sv: maSv,
+    ho_ten: hoTen,
+    xep_loai: xepLoai,
+    nganh: '',
+    lop: '',
     group,
-    avatar_url: null,
+    avatar_url: normalizeAvatar(avatarRaw),
+    avatar_path: avatarRaw,
   };
 }
 
-function normalizeBoardData(payload) {
-  if (!payload || typeof payload !== 'object') {
-    return { success: false, groupA: [], groupB: [], total: 0 };
-  }
-
-  if (Array.isArray(payload.groupA) || Array.isArray(payload.groupB)) {
-    const groupA = Array.isArray(payload.groupA) ? payload.groupA : [];
-    const groupB = Array.isArray(payload.groupB) ? payload.groupB : [];
-    return {
-      ...payload,
-      groupA,
-      groupB,
-      total: typeof payload.total === 'number' ? payload.total : groupA.length + groupB.length,
-    };
-  }
-
-  if (payload.display) {
-    const item = payload.display;
-    return {
-      success: !!payload.success,
-      groupA: item.group === 'A' ? [item] : [],
-      groupB: item.group === 'B' ? [item] : [],
-      total: 1,
-    };
-  }
-
-  if (payload.student) {
-    const item = toDisplayItem(payload.student, 'A');
-    return { success: !!payload.success, groupA: item ? [item] : [], groupB: [], total: item ? 1 : 0 };
-  }
-
-  return { success: !!payload.success, groupA: [], groupB: [], total: 0 };
-}
-
 export async function fetchDisplay() {
-  const res = await fetch(`${API_BASE}/api/display`);
-  if (!res.ok) throw new Error(`Display API: ${res.status}`);
-  const data = await res.json();
-  return normalizeBoardData(data);
+  const res = await fetch(buildSheetUrl());
+  if (!res.ok) throw new Error(`Sheet API: ${res.status}`);
+
+  const rawText = await res.text();
+  const parsed = parseGoogleVisualizationJson(rawText);
+  const rows = parsed?.table?.rows || [];
+
+  const groupA = [];
+  const groupB = [];
+
+  rows.forEach((row, rowIndex) => {
+    const left = mapRowToPerson(row, rowIndex, 'A', 0);
+    const right = mapRowToPerson(row, rowIndex, 'B', 4);
+    if (left) groupA.push(left);
+    if (right) groupB.push(right);
+  });
+
+  return {
+    success: true,
+    groupA,
+    groupB,
+    total: groupA.length + groupB.length,
+  };
 }
