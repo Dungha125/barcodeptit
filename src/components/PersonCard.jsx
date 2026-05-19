@@ -39,13 +39,13 @@ export default function PersonCard({ person, index = 0 }) {
         )}
       </div>
       <div className="person-card__name">
-        <h3>{hoTen || '—'}</h3>
-        {person.ma_sv && <span className="person-card__masv">{person.ma_sv}</span>}
+        <h3 title={hoTen || '—'}>{hoTen || '—'}</h3>
+        {person.ma_sv && <span className="person-card__masv" title={person.ma_sv}>{person.ma_sv}</span>}
       </div>
       <div className="person-card__meta">
         {meta.length > 0 ? (
           meta.map((line, i) => (
-            <p key={i} className="person-card__meta-line">
+            <p key={i} className="person-card__meta-line" title={line}>
               {line}
             </p>
           ))

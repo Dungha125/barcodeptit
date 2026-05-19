@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/checkin",
+      "destination": "/"
+    },
+    {
+      "source": "/checkin/",
+      "destination": "/"
+    }
+  ]
+}

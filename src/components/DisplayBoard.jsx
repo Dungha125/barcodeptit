@@ -5,7 +5,7 @@ import LeftColumn from './LeftColumn';
 import RightColumn from './RightColumn';
 
 const POLL_MS = 3000;
-const ROW_LIMIT = 10;
+const ROW_LIMIT = 5;
 const WINDOW_START_KEY = 'display-window-start';
 
 function useAutoScroll(ref, dep) {

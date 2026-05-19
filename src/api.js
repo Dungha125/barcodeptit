@@ -55,7 +55,8 @@ function normalizeBoardDataFromSheet(gvizPayload) {
   const groupA = [];
   const groupB = [];
 
-  rows.forEach((row, idx) => {
+  // Bỏ dòng đầu vì là header/title trong sheet.
+  rows.slice(1).forEach((row, idx) => {
     const hoTenA = getCell(row, 0);
     const maSVA = getCell(row, 1);
     const xepLoaiA = getCell(row, 2);
@@ -67,11 +68,11 @@ function normalizeBoardDataFromSheet(gvizPayload) {
     const avatarB = getCell(row, 7);
 
     if ([hoTenA, maSVA, xepLoaiA, avatarA].some((v) => String(v || '').trim())) {
-      groupA.push(buildItem({ group: 'A', hoTen: hoTenA, maSV: maSVA, xepLoai: xepLoaiA, avatar: avatarA, rowIndex: idx + 2 }));
+      groupA.push(buildItem({ group: 'A', hoTen: hoTenA, maSV: maSVA, xepLoai: xepLoaiA, avatar: avatarA, rowIndex: idx + 3 }));
     }
 
     if ([hoTenB, maSVB, xepLoaiB, avatarB].some((v) => String(v || '').trim())) {
-      groupB.push(buildItem({ group: 'B', hoTen: hoTenB, maSV: maSVB, xepLoai: xepLoaiB, avatar: avatarB, rowIndex: idx + 2 }));
+      groupB.push(buildItem({ group: 'B', hoTen: hoTenB, maSV: maSVB, xepLoai: xepLoaiB, avatar: avatarB, rowIndex: idx + 3 }));
     }
   });
 
