@@ -2,9 +2,13 @@ const SHEET_ID = import.meta.env.VITE_SHEET_ID || '1Po1O8Dk3MmTATy9NZo6-NA5SUHiu
 const SHEET_GID = import.meta.env.VITE_SHEET_GID || '0';
 const SHEET_QUERY_URL =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&gid=${SHEET_GID}`;
-const FALLBACK_HOST =
-  typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
-const WRITE_API_BASE = import.meta.env.VITE_WRITE_API_URL || `http://${FALLBACK_HOST}:8000`;
+const DEFAULT_WRITE_API_BASE =
+  typeof window === 'undefined'
+    ? 'http://127.0.0.1:8000'
+    : import.meta.env.DEV
+      ? `http://${window.location.hostname}:8000`
+      : window.location.origin;
+const WRITE_API_BASE = import.meta.env.VITE_WRITE_API_URL || DEFAULT_WRITE_API_BASE;
 
 function splitName(fullName = '') {
   const parts = String(fullName).trim().split(/\s+/).filter(Boolean);
