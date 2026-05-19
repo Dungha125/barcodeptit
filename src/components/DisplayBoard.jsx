@@ -25,23 +25,31 @@ function normalizeStart(value, totalRows) {
 }
 
 export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢNG TRÌNH CHIẾU' }) {
-  const [rows, setRows] = useState([]);
+  const [board, setBoard] = useState({ rows: [], windowStart: 0 });
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
-  const [windowStart, setWindowStart] = useState(0);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
+  const latestLoadIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    const loadId = latestLoadIdRef.current + 1;
+    latestLoadIdRef.current = loadId;
+
     try {
       const data = await fetchDisplay();
+      if (loadId !== latestLoadIdRef.current) return;
+
       const incomingRows = data.rows || [];
-      setRows(incomingRows);
-      setWindowStart(normalizeStart(data.windowStart ?? 0, incomingRows.length));
+      setBoard({
+        rows: incomingRows,
+        windowStart: normalizeStart(data.windowStart ?? 0, incomingRows.length),
+      });
       setStatus('ok');
       setError(null);
     } catch (e) {
+      if (loadId !== latestLoadIdRef.current) return;
       setError(e.message);
       setStatus('error');
     }
@@ -53,10 +61,13 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     return () => clearInterval(id);
   }, [load]);
 
+  const { rows, windowStart } = board;
   const totalRows = rows.length;
   const visibleRows = rows.slice(windowStart, windowStart + ROW_LIMIT);
   const visibleA = visibleRows.map((row) => row.left).filter(Boolean);
   const visibleB = visibleRows.map((row) => row.right).filter(Boolean);
+  const visibleAKey = visibleA.map((person) => person.id || person.ma_sv).join('|');
+  const visibleBKey = visibleB.map((person) => person.id || person.ma_sv).join('|');
 
   const canAdvance = windowStart + 1 < totalRows;
   const advanceWindow = async () => {
@@ -77,8 +88,8 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     }
   };
 
-  useAutoScroll(leftScrollRef, visibleA.length);
-  useAutoScroll(rightScrollRef, visibleB.length);
+  useAutoScroll(leftScrollRef, visibleAKey);
+  useAutoScroll(rightScrollRef, visibleBKey);
 
   return (
     <motion.div

@@ -28,9 +28,10 @@ function normalizeAvatar(value) {
 
 function buildItem({ group, hoTen, maSV, xepLoai, avatar, rowIndex }) {
   const { ho_dem, ten } = splitName(hoTen);
+  const normalizedMaSV = String(maSV || '').trim();
   return {
-    id: `${group}-${maSV || rowIndex}`,
-    ma_sv: String(maSV || '').trim(),
+    id: `${group}-${rowIndex}-${normalizedMaSV || 'empty'}`,
+    ma_sv: normalizedMaSV,
     ho_ten: String(hoTen || '').trim(),
     ho_dem,
     ten,
@@ -131,8 +132,14 @@ function normalizeBoardDataFromSheet(gvizPayload) {
   };
 }
 
-export async function fetchDisplay() {
-  const res = await fetch(SHEET_QUERY_URL);
+export async function fetchDisplay({ signal } = {}) {
+  const url = new URL(SHEET_QUERY_URL);
+  url.searchParams.set('_ts', Date.now().toString());
+
+  const res = await fetch(url.toString(), {
+    cache: 'no-store',
+    signal,
+  });
   if (!res.ok) {
     throw new Error(`Sheet API: ${res.status}`);
   }
@@ -144,6 +151,7 @@ export async function fetchDisplay() {
 export async function advanceCheckPointer() {
   const res = await fetch(`${WRITE_API_BASE}/api/sheet/advance`, {
     method: 'POST',
+    cache: 'no-store',
   });
   if (!res.ok) {
     throw new Error(`Advance API: ${res.status}`);
