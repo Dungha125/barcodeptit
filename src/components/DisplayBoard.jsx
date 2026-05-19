@@ -70,7 +70,7 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
   const visibleBKey = visibleB.map((person) => person.id || person.ma_sv).join('|');
 
   const canAdvance = windowStart + 1 < totalRows;
-  const advanceWindow = async () => {
+  const advanceWindow = useCallback(async () => {
     if (isAdvancing) return;
     try {
       setIsAdvancing(true);
@@ -86,7 +86,35 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     } finally {
       setIsAdvancing(false);
     }
-  };
+  }, [isAdvancing, load]);
+
+  useEffect(() => {
+    if (!enableAdvance) return undefined;
+
+    const onKeyDown = (event) => {
+      if (event.key !== 'Enter' && event.key !== 'NumpadEnter') return;
+
+      const target = event.target;
+      if (target instanceof HTMLElement) {
+        const tagName = target.tagName;
+        if (
+          target.isContentEditable ||
+          tagName === 'INPUT' ||
+          tagName === 'TEXTAREA' ||
+          tagName === 'SELECT'
+        ) {
+          return;
+        }
+      }
+
+      if (!canAdvance || isAdvancing) return;
+      event.preventDefault();
+      void advanceWindow();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [advanceWindow, canAdvance, enableAdvance, isAdvancing]);
 
   useAutoScroll(leftScrollRef, visibleAKey);
   useAutoScroll(rightScrollRef, visibleBKey);
@@ -117,6 +145,7 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
             className="display-board__next-btn"
             type="button"
             onClick={advanceWindow}
+            aria-keyshortcuts="Enter"
             disabled={!canAdvance || isAdvancing}
           >
             Chuyển tiếp
