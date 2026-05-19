@@ -133,9 +133,10 @@ function normalizeBoardDataFromSheet(gvizPayload) {
   };
 }
 
-export async function fetchDisplay({ signal, limit = 4 } = {}) {
+export async function fetchDisplay({ signal, limit = 4, skip = 0 } = {}) {
   const backendUrl = new URL(SHEET_DISPLAY_API);
   backendUrl.searchParams.set('limit', String(limit));
+  backendUrl.searchParams.set('skip', String(skip));
   backendUrl.searchParams.set('_ts', Date.now().toString());
 
   try {
@@ -173,14 +174,12 @@ export async function fetchDisplay({ signal, limit = 4 } = {}) {
   const rawText = await res.text();
   const gvizPayload = parseGvizText(rawText);
   const normalized = normalizeBoardDataFromSheet(gvizPayload);
-  const rows = normalized.rows.slice(
-    normalized.windowStart,
-    normalized.windowStart + limit
-  );
+  const sliceStart = normalized.windowStart + skip;
+  const rows = normalized.rows.slice(sliceStart, sliceStart + limit);
   return {
     ...normalized,
     rows,
-    hasNext: normalized.windowStart + rows.length < normalized.total,
+    hasNext: sliceStart + rows.length < normalized.total,
   };
 }
 

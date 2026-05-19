@@ -9,7 +9,7 @@ function getInitials(hoTen) {
 
 function accentFromId(id) {
   const hash = String(id).split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  return hash % 2 === 0 ? 'card--red' : 'card--orange';
+  return hash % 2 === 0 ? 'person-card--red' : 'person-card--orange';
 }
 
 export default function PersonCard({ person, index = 0 }) {

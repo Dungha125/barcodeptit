@@ -7,23 +7,36 @@ import RightColumn from './RightColumn';
 const POLL_MS = 3000;
 const ROW_LIMIT = 4;
 const PREFETCH_ROWS = 2;
-const FETCH_LIMIT = ROW_LIMIT + PREFETCH_ROWS;
 
-function useAutoScroll(ref, dep) {
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const { scrollHeight, clientHeight } = el;
-    if (scrollHeight > clientHeight) {
-      el.scrollTo({ top: scrollHeight - clientHeight, behavior: 'smooth' });
-    }
-  }, [dep, ref]);
+function rowKey(row) {
+  return `${row.sheet_row || ''}:${row.left?.id || '-'}:${row.right?.id || '-'}`;
 }
 
-function normalizeStart(value, totalRows) {
-  const parsed = Number.parseInt(value ?? '0', 10);
-  if (!Number.isFinite(parsed) || parsed < 0) return 0;
-  return Math.min(parsed, Math.max(0, totalRows - 1));
+function dedupeRows(existing, incoming) {
+  const seen = new Set(existing.map(rowKey));
+  return incoming.filter((row) => {
+    const key = rowKey(row);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function shiftBoardByOne(prev) {
+  const combined = [...prev.rows, ...prev.prefetchedRows];
+  if (combined.length <= 1) return prev;
+
+  const rows = combined.slice(1, 1 + ROW_LIMIT);
+  const prefetchedRows = combined.slice(1 + ROW_LIMIT);
+  const windowStart = prev.windowStart + 1;
+
+  return {
+    ...prev,
+    rows,
+    prefetchedRows,
+    windowStart,
+    hasNext: windowStart + rows.length < prev.total || prefetchedRows.length > 0,
+  };
 }
 
 export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢNG TRÌNH CHIẾU' }) {
@@ -37,42 +50,85 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
   const [isAdvancing, setIsAdvancing] = useState(false);
-  const leftScrollRef = useRef(null);
-  const rightScrollRef = useRef(null);
+  const boardRef = useRef(board);
   const latestLoadIdRef = useRef(0);
-  const lastBoardKeyRef = useRef('');
+  const lastVisibleKeyRef = useRef('');
+
+  useEffect(() => {
+    boardRef.current = board;
+  }, [board]);
+
+  const appendPrefetch = useCallback(async (loadId) => {
+    const current = boardRef.current;
+    const skip = ROW_LIMIT + current.prefetchedRows.length;
+    const data = await fetchDisplay({ limit: PREFETCH_ROWS, skip });
+    if (loadId !== latestLoadIdRef.current) return;
+
+    const incoming = Array.isArray(data?.rows) ? data.rows : [];
+    const extra = dedupeRows(current.prefetchedRows, incoming);
+    if (extra.length === 0) return;
+
+    setBoard((prev) => ({
+      ...prev,
+      prefetchedRows: [...prev.prefetchedRows, ...extra],
+      total: Math.max(prev.total, Number.parseInt(data?.total ?? '0', 10) || prev.total),
+      hasNext:
+        Boolean(data?.hasNext) ||
+        prev.windowStart + prev.rows.length < prev.total ||
+        prev.prefetchedRows.length + extra.length > 0,
+    }));
+  }, []);
+
+  const syncVisible = useCallback(async (loadId) => {
+    const data = await fetchDisplay({ limit: ROW_LIMIT, skip: 0 });
+    if (loadId !== latestLoadIdRef.current) return null;
+
+    const rows = Array.isArray(data?.rows) ? data.rows : [];
+    const total = Number.parseInt(data?.total ?? '0', 10) || rows.length;
+    const windowStart = Number.parseInt(data?.windowStart ?? '0', 10) || 0;
+    const visibleKey = `${windowStart}|${total}|${rows.map(rowKey).join('|')}`;
+
+    if (visibleKey !== lastVisibleKeyRef.current) {
+      lastVisibleKeyRef.current = visibleKey;
+      setBoard((prev) => ({
+        ...prev,
+        rows,
+        windowStart,
+        total,
+        hasNext:
+          Boolean(data?.hasNext) ||
+          windowStart + rows.length < total ||
+          prev.prefetchedRows.length > 0,
+      }));
+    }
+
+    return { rows, total, windowStart };
+  }, []);
 
   const load = useCallback(async () => {
     const loadId = latestLoadIdRef.current + 1;
     latestLoadIdRef.current = loadId;
 
     try {
-      const data = await fetchDisplay({ limit: FETCH_LIMIT });
-      if (loadId !== latestLoadIdRef.current) return;
+      const visible = await syncVisible(loadId);
+      if (!visible) return;
 
-      const incomingRows = Array.isArray(data?.rows) ? data.rows : [];
-      const visibleRows = incomingRows.slice(0, ROW_LIMIT);
-      const prefetchedRows = incomingRows.slice(ROW_LIMIT, ROW_LIMIT + PREFETCH_ROWS);
-      const total = Math.max(
-        incomingRows.length,
-        Number.parseInt(data?.total ?? '0', 10) || incomingRows.length
-      );
-      const windowStart = normalizeStart(data?.windowStart ?? 0, total);
-      const hasNext = windowStart + visibleRows.length < total;
-      const boardKey = `${windowStart}|${total}|${hasNext ? 1 : 0}|${incomingRows
-        .map((row) => `${row.sheet_row || ''}:${row.left?.id || '-'}:${row.right?.id || '-'}`)
-        .join('|')}`;
+      if (boardRef.current.prefetchedRows.length === 0) {
+        const prefetchData = await fetchDisplay({ limit: PREFETCH_ROWS, skip: ROW_LIMIT });
+        if (loadId !== latestLoadIdRef.current) return;
 
-      if (boardKey !== lastBoardKeyRef.current) {
-        lastBoardKeyRef.current = boardKey;
-        setBoard({
-          rows: visibleRows,
+        const prefetchedRows = Array.isArray(prefetchData?.rows) ? prefetchData.rows : [];
+        setBoard((prev) => ({
+          ...prev,
           prefetchedRows,
-          windowStart,
-          total,
-          hasNext,
-        });
+          total: Math.max(prev.total, Number.parseInt(prefetchData?.total ?? '0', 10) || prev.total),
+          hasNext:
+            Boolean(prefetchData?.hasNext) ||
+            prev.windowStart + prev.rows.length < prev.total ||
+            prefetchedRows.length > 0,
+        }));
       }
+
       setStatus('ok');
       setError(null);
     } catch (e) {
@@ -80,7 +136,7 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
       setError(e.message);
       setStatus('error');
     }
-  }, []);
+  }, [syncVisible]);
 
   useEffect(() => {
     load();
@@ -88,51 +144,37 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     return () => clearInterval(id);
   }, [load]);
 
-  const { rows: visibleRows, prefetchedRows, windowStart, total: totalRows, hasNext } = board;
+  const { rows: visibleRows, prefetchedRows, hasNext } = board;
   const visibleA = visibleRows.map((row) => row.left).filter(Boolean);
   const visibleB = visibleRows.map((row) => row.right).filter(Boolean);
-  const visibleAKey = visibleA.map((person) => person.id || person.ma_sv).join('|');
-  const visibleBKey = visibleB.map((person) => person.id || person.ma_sv).join('|');
 
-  const canAdvance = hasNext;
+  const canAdvance = hasNext || prefetchedRows.length > 0;
+
   const advanceWindow = useCallback(async () => {
     if (isAdvancing) return;
 
-    const combinedRows = [...visibleRows, ...prefetchedRows];
-    const canUsePrefetch = prefetchedRows.length > 0;
-    if (canUsePrefetch) {
-      const nextVisibleRows = combinedRows.slice(1, 1 + ROW_LIMIT);
-      const nextPrefetchedRows = combinedRows.slice(
-        1 + ROW_LIMIT,
-        1 + ROW_LIMIT + PREFETCH_ROWS
-      );
-      const nextWindowStart = Math.min(windowStart + 1, Math.max(0, totalRows - 1));
-      setBoard((prev) => ({
-        ...prev,
-        rows: nextVisibleRows,
-        prefetchedRows: nextPrefetchedRows,
-        windowStart: nextWindowStart,
-        hasNext: nextWindowStart + nextVisibleRows.length < prev.total,
-      }));
-    }
+    const loadId = latestLoadIdRef.current + 1;
+    setIsAdvancing(true);
+    setBoard((prev) => shiftBoardByOne(prev));
 
     try {
-      setIsAdvancing(true);
       const result = await advanceCheckPointer();
       if (result?.advanced === false && result?.reason) {
         setError(`Không thể chuyển tiếp: ${result.reason}`);
         await load();
-      } else {
-        setError(null);
-        void load();
+        return;
       }
+
+      setError(null);
+      await syncVisible(loadId);
+      await appendPrefetch(loadId);
     } catch (e) {
       setError(e.message);
       await load();
     } finally {
       setIsAdvancing(false);
     }
-  }, [isAdvancing, load, prefetchedRows, totalRows, visibleRows, windowStart]);
+  }, [appendPrefetch, isAdvancing, load, syncVisible]);
 
   useEffect(() => {
     if (!enableAdvance) return undefined;
@@ -162,9 +204,6 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [advanceWindow, canAdvance, enableAdvance, isAdvancing]);
 
-  useAutoScroll(leftScrollRef, visibleAKey);
-  useAutoScroll(rightScrollRef, visibleBKey);
-
   return (
     <motion.div
       className="display-board"
@@ -172,19 +211,32 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
     >
-      <div className="display-board__canvas" aria-label={pageTitle}>
-        <div className="display-board__split">
-          <LeftColumn items={visibleA} listRef={leftScrollRef} />
-          <RightColumn items={visibleB} listRef={rightScrollRef} />
-        </div>
+      <motion.div
+        className="display-board__canvas"
+        aria-label={pageTitle}
+        layout
+        transition={{ layout: { duration: 0.35 } }}
+      >
+        <motion.div
+          className="display-board__split"
+          layout
+          transition={{ layout: { duration: 0.35 } }}
+        >
+          <LeftColumn items={visibleA} slotCount={ROW_LIMIT} />
+          <RightColumn items={visibleB} slotCount={ROW_LIMIT} />
+        </motion.div>
 
         <div className="display-board__meta" role="status" aria-live="polite">
           <span className="display-board__meta-title">{pageTitle}</span>
           {status !== 'ok' && (
-            <div className="display-board__status">
+            <motion.div
+              className="display-board__status"
+              layout
+              transition={{ layout: { duration: 0.35 } }}
+            >
               {status === 'loading' && <span>Đang kết nối API…</span>}
               {status === 'error' && <span className="display-board__status--err">{error}</span>}
-            </div>
+            </motion.div>
           )}
           {enableAdvance && (
             <button
@@ -198,7 +250,7 @@ export default function DisplayBoard({ enableAdvance = false, pageTitle = 'BẢN
             </button>
           )}
         </div>
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
