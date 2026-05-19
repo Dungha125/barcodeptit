@@ -15,11 +15,12 @@ function accentFromId(id) {
 export default function PersonCard({ person, index = 0 }) {
   const hoTen = person.ho_ten || `${person.ho_dem || ''} ${person.ten || ''}`.trim();
   const meta = [person.nganh, person.lop, person.xep_loai].filter(Boolean);
+  const hasMeta = meta.length > 0;
   const borderClass = accentFromId(person.id || person.ma_sv || index);
 
   return (
     <motion.article
-      className={`person-card ${borderClass}`}
+      className={`person-card ${borderClass} ${hasMeta ? 'person-card--with-meta' : 'person-card--compact'}`}
       layout
       initial={{ opacity: 0, y: 48 }}
       animate={{ opacity: 1, y: 0 }}
@@ -42,17 +43,15 @@ export default function PersonCard({ person, index = 0 }) {
         <h3 title={hoTen || '—'}>{hoTen || '—'}</h3>
         {person.ma_sv && <span className="person-card__masv" title={person.ma_sv}>{person.ma_sv}</span>}
       </div>
-      <div className="person-card__meta">
-        {meta.length > 0 ? (
-          meta.map((line, i) => (
+      {hasMeta && (
+        <div className="person-card__meta">
+          {meta.map((line, i) => (
             <p key={i} className="person-card__meta-line" title={line}>
               {line}
             </p>
-          ))
-        ) : (
-          <p className="person-card__meta-line person-card__meta-line--muted">—</p>
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </motion.article>
   );
 }
