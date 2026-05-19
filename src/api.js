@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+const FALLBACK_HOST =
+  typeof window !== 'undefined' ? window.location.hostname : '127.0.0.1';
+const API_BASE = import.meta.env.VITE_API_URL || `http://${FALLBACK_HOST}:8000`;
 
 function toDisplayItem(student, group = 'A') {
   if (!student) return null;
