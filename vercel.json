@@ -15,6 +15,14 @@
     {
       "source": "/slide/",
       "destination": "/"
+    },
+    {
+      "source": "/led",
+      "destination": "/"
+    },
+    {
+      "source": "/led/",
+      "destination": "/"
     }
   ]
 }

@@ -3,9 +3,13 @@ import { fetchAdminSubmissions } from '../adminApi';
 import GraduationTemplate from './GraduationTemplate';
 import '../styles/recognition.css';
 
-const SLIDE_BACKGROUND = '/BACKLED_TỐT NGHIỆP PTIT.png';
+export const SLIDE_BACKGROUND = '/BACKLED_TỐT NGHIỆP PTIT.png';
+export const LED_BACKGROUND = '/BACKLED_TỐT NGHIỆP PTIT (3).png';
 
-export default function DualRecognitionPage() {
+export default function DualRecognitionPage({
+  background = SLIDE_BACKGROUND,
+  variant = 'slide',
+}) {
   const [submissions, setSubmissions] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState(null);
@@ -31,8 +35,8 @@ export default function DualRecognitionPage() {
 
   return (
     <div
-      className="recognition-page"
-      style={{ backgroundImage: `url("${encodeURI(SLIDE_BACKGROUND)}")` }}
+      className={`recognition-page recognition-page--${variant}`}
+      style={{ backgroundImage: `url("${encodeURI(background)}")` }}
     >
       {status === 'loading' && <div className="recognition-page__overlay">Đang tải danh sách…</div>}
       {status === 'error' && (        <div className="recognition-page__overlay recognition-page__overlay--err">{error}</div>

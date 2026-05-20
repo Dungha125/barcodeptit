@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import DisplayBoard from './components/DisplayBoard';
-import DualRecognitionPage from './components/DualRecognitionPage';
+import DualRecognitionPage, { LED_BACKGROUND } from './components/DualRecognitionPage';
 import RequireAdminAuth from './components/RequireAdminAuth';
 
 function normalizePath(pathname) {
@@ -19,11 +19,20 @@ export default function App() {
 
   const isCheckin = path === '/checkin';
   const isSlide = path === '/slide';
+  const isLed = path === '/led';
 
   if (isSlide) {
     return (
       <RequireAdminAuth bare>
-        <DualRecognitionPage />
+        <DualRecognitionPage variant="slide" />
+      </RequireAdminAuth>
+    );
+  }
+
+  if (isLed) {
+    return (
+      <RequireAdminAuth bare>
+        <DualRecognitionPage background={LED_BACKGROUND} variant="led" />
       </RequireAdminAuth>
     );
   }

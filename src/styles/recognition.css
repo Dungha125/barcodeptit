@@ -15,16 +15,72 @@
 .recognition-page__pair {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 50vh;
-  align-content: start;
   align-items: stretch;
   width: 100%;
+  gap: clamp(12px, 1.25vw, 24px);
+  padding-left: clamp(20px, 2.08vw, 40px);
+  padding-right: clamp(20px, 2.08vw, 40px);
+  box-sizing: border-box;
+}
+
+/* /slide — nội dung phía trên */
+.recognition-page--slide {
+  display: block;
+}
+
+.recognition-page--slide .recognition-page__pair {
+  grid-template-rows: 50vh;
+  align-content: start;
   height: 100%;
   min-height: 100vh;
   min-height: 100dvh;
-  gap: clamp(12px, 1.25vw, 24px);
-  padding: clamp(56px, 7vh, 88px) clamp(20px, 2.08vw, 40px) clamp(16px, 1.85vh, 20px);
-  box-sizing: border-box;
+  padding-top: clamp(88px, 11.5vh, 128px);
+  padding-bottom: clamp(16px, 1.85vh, 20px);
+}
+
+.recognition-page--slide .grad-template__frame {
+  padding-top: clamp(44px, 5.8vh, 68px);
+}
+
+/* /led — nội dung sát đáy màn */
+.recognition-page--led {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.recognition-page--led .recognition-page__pair {
+  margin-top: auto;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: 0;
+  grid-template-rows: min(42vh, 480px);
+  align-content: end;
+  align-items: stretch;
+  padding-top: 0;
+  padding-bottom: 0;
+  transform: translateY(clamp(-88px, -13.5vh, -160px));
+}
+
+.recognition-page--led .grad-template__frame {
+  align-items: center;
+  padding-top: clamp(12px, 1.5vh, 20px);
+  padding-bottom: clamp(12px, 1.5vh, 20px);
+}
+
+.recognition-page--led .grad-template__photo {
+  align-self: center;
+  height: auto;
+  max-height: min(36vh, 320px);
+  width: auto;
+}
+
+.recognition-page--led .grad-template__info {
+  margin-top: 0;
+  align-self: center;
+  height: auto;
+  justify-content: center;
 }
 
 .recognition-page__overlay {
@@ -188,11 +244,18 @@
 }
 
 @media (max-width: 960px) {
-  .recognition-page__pair {
+  .recognition-page--slide .recognition-page__pair {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(2, min(50vh, 420px));
     overflow-y: auto;
     align-content: start;
+  }
+
+  .recognition-page--led .recognition-page__pair {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(2, min(38vh, 360px));
+    overflow-y: auto;
+    align-content: end;
   }
 
   .grad-template__info {
