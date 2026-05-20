@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchAdminSubmissions } from '../adminApi';
 import GraduationTemplate from './GraduationTemplate';
 import '../styles/recognition.css';
+
+const SLIDE_BACKGROUND = '/BACKLED_TỐT NGHIỆP PTIT.png';
+
 export default function DualRecognitionPage() {
   const [submissions, setSubmissions] = useState([]);
   const [status, setStatus] = useState('loading');
@@ -27,7 +30,10 @@ export default function DualRecognitionPage() {
   const right = submissions[1] || null;
 
   return (
-    <div className="recognition-page">
+    <div
+      className="recognition-page"
+      style={{ backgroundImage: `url("${encodeURI(SLIDE_BACKGROUND)}")` }}
+    >
       {status === 'loading' && <div className="recognition-page__overlay">Đang tải danh sách…</div>}
       {status === 'error' && (        <div className="recognition-page__overlay recognition-page__overlay--err">{error}</div>
       )}
