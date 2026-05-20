@@ -7,6 +7,14 @@
     {
       "source": "/checkin/",
       "destination": "/"
+    },
+    {
+      "source": "/slide",
+      "destination": "/"
+    },
+    {
+      "source": "/slide/",
+      "destination": "/"
     }
   ]
 }
